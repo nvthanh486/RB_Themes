@@ -6,12 +6,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.mode.ui.theme.ModeTheme
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,11 +21,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 // Tạo DataStore
@@ -33,27 +31,22 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val dataStore = dataStore
-            val isDarkTheme by dataStore.data
-                .map { preferences -> preferences[booleanPreferencesKey("dark_theme")] ?: false }
-                .collectAsState(initial = false)
-
-            ModeTheme(darkTheme = isDarkTheme) {
-                ThemeSwitcher(dataStore = dataStore)
+            ModeTheme(darkTheme = ThemeManager.getIsDarkThemeFlow(this).collectAsState(initial = false).value) {
+                ThemeSwitcherWithToggle()
             }
         }
     }
 }
 
 @Composable
-fun ThemeSwitcher(dataStore: DataStore<Preferences>) {
+fun ThemeSwitcherWithToggle() {
     val options = listOf("Light Mode", "Dark Mode")
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-    // Đọc selectedOption từ DataStore
-    val selectedOption by dataStore.data
-        .map { preferences -> preferences[stringPreferencesKey("theme_option")] ?: "Light Mode" }
-        .collectAsState(initial = "Light Mode")
+    // Sử dụng ThemeManager để lấy tùy chọn chủ đề hiện tại
+    val selectedOption by ThemeManager.getThemeOptionFlow(context).collectAsState(initial = "Light Mode")
+    var isDark by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -81,10 +74,8 @@ fun ThemeSwitcher(dataStore: DataStore<Preferences>) {
                     selected = (option == selectedOption),
                     onClick = {
                         coroutineScope.launch {
-                            dataStore.edit { preferences ->
-                                preferences[booleanPreferencesKey("dark_theme")] = option == "Dark Mode"
-                                preferences[stringPreferencesKey("theme_option")] = option
-                            }
+                            val isDark = option == "Dark Mode"
+                            ThemeManager.setTheme(context, isDark)
                         }
                     }
                 )
@@ -103,5 +94,18 @@ fun ThemeSwitcher(dataStore: DataStore<Preferences>) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onBackground
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = {
+                coroutineScope.launch {
+                    isDark = !isDark
+                    ThemeManager.setTheme(context, isDark)
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Toggle Theme (Current: ${if (isDark) "Dark" else "Light"})")
+        }
     }
 }
